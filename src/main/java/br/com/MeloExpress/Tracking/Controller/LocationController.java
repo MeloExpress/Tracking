@@ -5,6 +5,10 @@ import com.google.maps.GeoApiContext;
 import com.google.maps.GeocodingApi;
 import com.google.maps.model.GeocodingResult;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -15,13 +19,14 @@ public class LocationController {
     @Autowired
     private KafkaTemplate<String, LocationMessage> kafkaTemplate;
 
+    @Value("${google.maps.api-key}")
+    private String googleMapsApiKey;
+
     private double lastLatitude;
     private double lastLongitude;
 
     private static final String TOPIC = "vehicle-location";
-
-    private static final String GOOGLE_MAPS_API_KEY = "AIzaSyCBazjtHTeOM0e9rFxNUx5skliooRSobCM";
-    private final GeoApiContext geoApiContext = new GeoApiContext.Builder().apiKey(GOOGLE_MAPS_API_KEY).build();
+    private final GeoApiContext geoApiContext = new GeoApiContext.Builder().apiKey(googleMapsApiKey).build();
 
     private String lastFormattedAddress;
 
@@ -40,13 +45,17 @@ public class LocationController {
     }
 
     @GetMapping("/currentLocationMap")
-    public String getCurrentLocationMap() {
+    public ResponseEntity<Object> getCurrentLocationMap() {
         if (lastLatitude != 0 && lastLongitude != 0) {
-            return "https://www.google.com/maps?q=" + lastLatitude + "," + lastLongitude;
+            String mapsUrl = "https://www.google.com/maps?q=" + lastLatitude + "," + lastLongitude;
+            HttpHeaders headers = new HttpHeaders();
+            headers.add("Location", mapsUrl);
+            return new ResponseEntity<>(headers, HttpStatus.FOUND);
         } else {
-            return "Localização atual não encontrada.";
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Localização atual não encontrada.");
         }
     }
+
 
     @KafkaListener(topics = TOPIC, groupId = "${spring.kafka.consumer.group-id}")
     public void receiveLocationMessage(LocationMessage locationMessage) {
